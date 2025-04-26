@@ -1,0 +1,941 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pronóstico Baloto 2025</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/papaparse@5.3.2/papaparse.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/luxon@3.0.1/build/global/luxon.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dayjs@1.11.7/dayjs.min.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: #333;
+            background-color: #f9f9f9;
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
+        .tooltip {
+            position: relative;
+            display: inline-block;
+        }
+        .tooltip .tooltiptext {
+            visibility: hidden;
+            width: 200px;
+            background-color: #555;
+            color: #fff;
+            text-align: center;
+            border-radius: 6px;
+            padding: 5px;
+            position: absolute;
+            z-index: 1;
+            bottom: 125%;
+            left: 50%;
+            margin-left: -100px;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        .tooltip:hover .tooltiptext {
+            visibility: visible;
+            opacity: 1;
+        }
+        .validation-chart-container {
+            width: 100%;
+            height: 300px;
+            margin-bottom: 20px;
+        }
+        .custom-file-input::-webkit-file-upload-button {
+            visibility: hidden;
+        }
+        .custom-file-input::before {
+            content: 'Seleccionar archivo';
+            display: inline-block;
+            background: linear-gradient(to bottom, #f9f9f9, #e3e3e3);
+            border: 1px solid #999;
+            border-radius: 3px;
+            padding: 5px 8px;
+            outline: none;
+            white-space: nowrap;
+            cursor: pointer;
+            text-shadow: 1px 1px #fff;
+            font-weight: 700;
+            font-size: 10pt;
+        }
+        .custom-file-input:hover::before {
+            border-color: black;
+        }
+        .custom-file-input:active::before {
+            background: -webkit-linear-gradient(top, #e3e3e3, #f9f9f9);
+        }
+        .num-ball {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            margin: 0 5px;
+            font-weight: bold;
+        }
+        .ball-a { background-color: #FF5252; color: white; }
+        .ball-b { background-color: #4CAF50; color: white; }
+        .ball-c { background-color: #2196F3; color: white; }
+        .ball-d { background-color: #FFC107; color: black; }
+        .ball-e { background-color: #9C27B0; color: white; }
+        .ball-f { background-color: #FF9800; color: white; }
+    </style>
+</head>
+<body class="p-4 md:p-8">
+    <header class="mb-8">
+        <h1 class="text-3xl font-bold text-center text-blue-700 mb-4">Pronóstico Baloto 2025</h1>
+        <p class="text-center text-gray-600 mb-6">Análisis y pronóstico de números del Baloto usando modelo XGBoost</p>
+    </header>
+
+    <div class="bg-white rounded-lg shadow-md p-6 mb-8">
+        <h2 class="text-xl font-semibold mb-4 text-blue-600">Carga de Datos</h2>
+        
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
+            <div class="border rounded-lg p-4 bg-gray-50">
+                <h3 class="font-medium mb-2">Archivo Principal</h3>
+                <div class="mb-2">
+                    <input type="file" id="mainFile" accept=".csv" class="custom-file-input w-full p-2 border rounded">
+                </div>
+                <div id="mainFileStatus" class="text-sm text-gray-600">Esperando archivo...</div>
+            </div>
+            
+            <div class="border rounded-lg p-4 bg-gray-50">
+                <h3 class="font-medium mb-2">Archivo Inverso</h3>
+                <div class="mb-2">
+                    <input type="file" id="invFile" accept=".csv" class="custom-file-input w-full p-2 border rounded">
+                </div>
+                <div id="invFileStatus" class="text-sm text-gray-600">Esperando archivo...</div>
+            </div>
+        </div>
+        
+        <div class="text-center">
+            <button id="loadDataBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded disabled:bg-gray-400" disabled>
+                Cargar y Procesar Datos
+            </button>
+        </div>
+    </div>
+
+    <div class="bg-white rounded-lg shadow-md p-6 mb-8">
+        <h2 class="text-xl font-semibold mb-4 text-blue-600">Parámetros del Modelo</h2>
+        
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            <div>
+                <label for="iterations" class="block text-sm font-medium text-gray-700 mb-1">Número de iteraciones:</label>
+                <input type="number" id="iterations" min="50" max="5000" value="212" class="w-full p-2 border rounded">
+            </div>
+            <div>
+                <label for="indices" class="block text-sm font-medium text-gray-700 mb-1">Índices a generar:</label>
+                <input type="number" id="indices" min="1" value="7" class="w-full p-2 border rounded">
+            </div>
+            <div>
+                <label for="nthread" class="block text-sm font-medium text-gray-700 mb-1">CPUs a utilizar:</label>
+                <input type="number" id="nthread" min="2" value="2" class="w-full p-2 border rounded">
+            </div>
+            <div>
+                <label for="maxDepth" class="block text-sm font-medium text-gray-700 mb-1">Profundidad de árboles:</label>
+                <input type="number" id="maxDepth" min="2" value="15" class="w-full p-2 border rounded">
+            </div>
+            <div>
+                <label for="trainPercentage" class="block text-sm font-medium text-gray-700 mb-1">% de entrenamiento:</label>
+                <input type="number" id="trainPercentage" min="0.1" max="0.99" step="0.01" value="0.85" class="w-full p-2 border rounded">
+            </div>
+            <div class="flex items-end">
+                <button id="runModelBtn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded w-full disabled:bg-gray-400" disabled>
+                    Ejecutar Modelo
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div class="tabs mb-4">
+        <div class="flex border-b">
+            <button class="tab-button px-4 py-2 font-medium text-blue-600 border-b-2 border-blue-600" data-tab="predictions">
+                Predicciones
+            </button>
+            <button class="tab-button px-4 py-2 font-medium text-gray-500" data-tab="validation">
+                Validación
+            </button>
+            <button class="tab-button px-4 py-2 font-medium text-gray-500" data-tab="historic">
+                Histórico
+            </button>
+        </div>
+    </div>
+
+    <div id="predictions" class="tab-content active bg-white rounded-lg shadow-md p-6 mb-8">
+        <h2 class="text-xl font-semibold mb-4 text-blue-600">Resultados de Predicción</h2>
+        
+        <div id="loadingResults" class="text-center py-8 hidden">
+            <div class="inline-block animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-600"></div>
+            <p class="mt-2 text-gray-700">Procesando resultados...</p>
+        </div>
+        
+        <div id="noResultsMessage" class="text-center py-8">
+            <p class="text-gray-700">Cargue los archivos y ejecute el modelo para ver resultados</p>
+        </div>
+        
+        <div id="resultsContent" class="hidden">
+            <div class="mb-6">
+                <h3 class="font-medium mb-3 text-gray-700">Pronóstico para la próxima fecha</h3>
+                <div class="flex justify-center flex-wrap mb-4">
+                    <div class="num-ball ball-a" id="pred-a">--</div>
+                    <div class="num-ball ball-b" id="pred-b">--</div>
+                    <div class="num-ball ball-c" id="pred-c">--</div>
+                    <div class="num-ball ball-d" id="pred-d">--</div>
+                    <div class="num-ball ball-e" id="pred-e">--</div>
+                    <div class="num-ball ball-f" id="pred-f">--</div>
+                </div>
+                <p class="text-center text-sm text-gray-600" id="pred-date">Fecha: --/--/----</p>
+            </div>
+            
+            <div class="overflow-x-auto">
+                <table class="min-w-full border-collapse">
+                    <thead>
+                        <tr class="bg-gray-100">
+                            <th class="border py-2 px-3 text-left">Fecha</th>
+                            <th class="border py-2 px-3 text-center">A</th>
+                            <th class="border py-2 px-3 text-center">B</th>
+                            <th class="border py-2 px-3 text-center">C</th>
+                            <th class="border py-2 px-3 text-center">D</th>
+                            <th class="border py-2 px-3 text-center">E</th>
+                            <th class="border py-2 px-3 text-center">F</th>
+                        </tr>
+                    </thead>
+                    <tbody id="predictionTableBody">
+                        <!-- Datos de predicción se cargarán aquí -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div id="validation" class="tab-content bg-white rounded-lg shadow-md p-6 mb-8">
+        <h2 class="text-xl font-semibold mb-4 text-blue-600">Validación del Modelo</h2>
+        
+        <div id="validationContent" class="hidden">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="validation-chart-container">
+                    <h3 class="font-medium mb-2 text-center">Columna A: Predicción vs Real</h3>
+                    <canvas id="chartColumnA"></canvas>
+                </div>
+                <div class="validation-chart-container">
+                    <h3 class="font-medium mb-2 text-center">Columna B: Predicción vs Real</h3>
+                    <canvas id="chartColumnB"></canvas>
+                </div>
+                <div class="validation-chart-container">
+                    <h3 class="font-medium mb-2 text-center">Columna C: Predicción vs Real</h3>
+                    <canvas id="chartColumnC"></canvas>
+                </div>
+                <div class="validation-chart-container">
+                    <h3 class="font-medium mb-2 text-center">Columna D: Predicción vs Real</h3>
+                    <canvas id="chartColumnD"></canvas>
+                </div>
+                <div class="validation-chart-container">
+                    <h3 class="font-medium mb-2 text-center">Columna E: Predicción vs Real</h3>
+                    <canvas id="chartColumnE"></canvas>
+                </div>
+                <div class="validation-chart-container">
+                    <h3 class="font-medium mb-2 text-center">Columna F: Predicción vs Real</h3>
+                    <canvas id="chartColumnF"></canvas>
+                </div>
+            </div>
+            
+            <div class="mt-8">
+                <h3 class="font-medium mb-3 text-gray-700">Métricas de Rendimiento</h3>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div class="bg-gray-50 border rounded-lg p-4">
+                        <h4 class="font-medium text-sm mb-1">Error Medio Absoluto</h4>
+                        <div class="grid grid-cols-6 gap-2 text-center">
+                            <div id="mae-a" class="text-red-600 font-bold">-</div>
+                            <div id="mae-b" class="text-green-600 font-bold">-</div>
+                            <div id="mae-c" class="text-blue-600 font-bold">-</div>
+                            <div id="mae-d" class="text-yellow-600 font-bold">-</div>
+                            <div id="mae-e" class="text-purple-600 font-bold">-</div>
+                            <div id="mae-f" class="text-orange-600 font-bold">-</div>
+                        </div>
+                    </div>
+                    <div class="bg-gray-50 border rounded-lg p-4">
+                        <h4 class="font-medium text-sm mb-1">Error Cuadrático Medio</h4>
+                        <div class="grid grid-cols-6 gap-2 text-center">
+                            <div id="mse-a" class="text-red-600 font-bold">-</div>
+                            <div id="mse-b" class="text-green-600 font-bold">-</div>
+                            <div id="mse-c" class="text-blue-600 font-bold">-</div>
+                            <div id="mse-d" class="text-yellow-600 font-bold">-</div>
+                            <div id="mse-e" class="text-purple-600 font-bold">-</div>
+                            <div id="mse-f" class="text-orange-600 font-bold">-</div>
+                        </div>
+                    </div>
+                    <div class="bg-gray-50 border rounded-lg p-4">
+                        <h4 class="font-medium text-sm mb-1">Precisión (%)</h4>
+                        <div class="grid grid-cols-6 gap-2 text-center">
+                            <div id="acc-a" class="text-red-600 font-bold">-</div>
+                            <div id="acc-b" class="text-green-600 font-bold">-</div>
+                            <div id="acc-c" class="text-blue-600 font-bold">-</div>
+                            <div id="acc-d" class="text-yellow-600 font-bold">-</div>
+                            <div id="acc-e" class="text-purple-600 font-bold">-</div>
+                            <div id="acc-f" class="text-orange-600 font-bold">-</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div id="noValidationMessage" class="text-center py-8">
+            <p class="text-gray-700">Ejecute el modelo para ver los resultados de validación</p>
+        </div>
+    </div>
+
+    <div id="historic" class="tab-content bg-white rounded-lg shadow-md p-6 mb-8">
+        <h2 class="text-xl font-semibold mb-4 text-blue-600">Datos Históricos</h2>
+        
+        <div class="mb-6">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div>
+                    <label for="dateStart" class="block text-sm font-medium text-gray-700 mb-1">Fecha inicial:</label>
+                    <input type="date" id="dateStart" class="w-full p-2 border rounded">
+                </div>
+                <div>
+                    <label for="dateEnd" class="block text-sm font-medium text-gray-700 mb-1">Fecha final:</label>
+                    <input type="date" id="dateEnd" class="w-full p-2 border rounded">
+                </div>
+            </div>
+            
+            <div class="grid grid-cols-6 gap-2 mb-4">
+                <div>
+                    <label for="filterA" class="block text-sm font-medium text-gray-700 mb-1">Filtro A:</label>
+                    <input type="number" id="filterA" min="0" max="43" class="w-full p-2 border rounded">
+                </div>
+                <div>
+                    <label for="filterB" class="block text-sm font-medium text-gray-700 mb-1">Filtro B:</label>
+                    <input type="number" id="filterB" min="0" max="43" class="w-full p-2 border rounded">
+                </div>
+                <div>
+                    <label for="filterC" class="block text-sm font-medium text-gray-700 mb-1">Filtro C:</label>
+                    <input type="number" id="filterC" min="0" max="43" class="w-full p-2 border rounded">
+                </div>
+                <div>
+                    <label for="filterD" class="block text-sm font-medium text-gray-700 mb-1">Filtro D:</label>
+                    <input type="number" id="filterD" min="0" max="43" class="w-full p-2 border rounded">
+                </div>
+                <div>
+                    <label for="filterE" class="block text-sm font-medium text-gray-700 mb-1">Filtro E:</label>
+                    <input type="number" id="filterE" min="0" max="43" class="w-full p-2 border rounded">
+                </div>
+                <div>
+                    <label for="filterF" class="block text-sm font-medium text-gray-700 mb-1">Filtro F:</label>
+                    <input type="number" id="filterF" min="0" max="16" class="w-full p-2 border rounded">
+                </div>
+            </div>
+            
+            <div class="text-center">
+                <button id="applyFiltersBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded disabled:bg-gray-400" disabled>
+                    Aplicar Filtros
+                </button>
+            </div>
+        </div>
+        
+        <div id="historicContent" class="hidden">
+            <div class="overflow-x-auto">
+                <table class="min-w-full border-collapse">
+                    <thead>
+                        <tr class="bg-gray-100">
+                            <th class="border py-2 px-3 text-left">Fecha</th>
+                            <th class="border py-2 px-3 text-center">A</th>
+                            <th class="border py-2 px-3 text-center">B</th>
+                            <th class="border py-2 px-3 text-center">C</th>
+                            <th class="border py-2 px-3 text-center">D</th>
+                            <th class="border py-2 px-3 text-center">E</th>
+                            <th class="border py-2 px-3 text-center">F</th>
+                        </tr>
+                    </thead>
+                    <tbody id="historicTableBody">
+                        <!-- Datos históricos se cargarán aquí -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <div id="noHistoricMessage" class="text-center py-8">
+            <p class="text-gray-700">Cargue los archivos para ver datos históricos</p>
+        </div>
+    </div>
+
+    <div class="bg-white rounded-lg shadow-md p-6 mb-8">
+        <h2 class="text-xl font-semibold mb-4 text-blue-600">Acerca de la Aplicación</h2>
+        <p class="mb-2">Esta aplicación utiliza el algoritmo XGBoost para realizar pronósticos de números del Baloto basados en datos históricos.</p>
+        <p class="mb-2">Los resultados se presentan tanto en formato de tabla como en gráficas de validación que permiten comparar las predicciones con los datos reales.</p>
+        <p>Para obtener mejores resultados, se recomienda proporcionar datos históricos completos y ajustar los parámetros del modelo según sea necesario.</p>
+    </div>
+
+    <script>
+        // Variables globales
+        let mainData = null;
+        let invData = null;
+        let predictionResults = null;
+        let validationData = null;
+        let charts = {};
+        
+        // Función de inicio
+        document.addEventListener('DOMContentLoaded', function() {
+            // Inicializar componentes
+            initTabSystem();
+            setupFileInputs();
+            setupDateInputs();
+            setupEventListeners();
+            
+            // Simulación para demostración
+            setupDemoMode();
+        });
+        
+        // Inicializar sistema de pestañas
+        function initTabSystem() {
+            const tabButtons = document.querySelectorAll('.tab-button');
+            const tabContents = document.querySelectorAll('.tab-content');
+            
+            tabButtons.forEach(button => {
+                button.addEventListener('click', () => {
+                    const tabId = button.getAttribute('data-tab');
+                    
+                    // Activar botón seleccionado
+                    tabButtons.forEach(btn => {
+                        btn.classList.remove('text-blue-600', 'border-b-2', 'border-blue-600');
+                        btn.classList.add('text-gray-500');
+                    });
+                    button.classList.add('text-blue-600', 'border-b-2', 'border-blue-600');
+                    button.classList.remove('text-gray-500');
+                    
+                    // Mostrar contenido de pestaña
+                    tabContents.forEach(content => {
+                        content.classList.remove('active');
+                    });
+                    document.getElementById(tabId).classList.add('active');
+                });
+            });
+        }
+        
+        // Configurar entradas de archivos
+        function setupFileInputs() {
+            const mainFileInput = document.getElementById('mainFile');
+            const invFileInput = document.getElementById('invFile');
+            const loadDataBtn = document.getElementById('loadDataBtn');
+            
+            mainFileInput.addEventListener('change', function() {
+                updateFileStatus(this, 'mainFileStatus');
+                checkFilesReady();
+            });
+            
+            invFileInput.addEventListener('change', function() {
+                updateFileStatus(this, 'invFileStatus');
+                checkFilesReady();
+            });
+            
+            function updateFileStatus(input, statusId) {
+                const statusElement = document.getElementById(statusId);
+                if (input.files.length > 0) {
+                    statusElement.textContent = `Archivo seleccionado: ${input.files[0].name}`;
+                    statusElement.className = 'text-sm text-green-600';
+                } else {
+                    statusElement.textContent = 'Esperando archivo...';
+                    statusElement.className = 'text-sm text-gray-600';
+                }
+            }
+            
+            function checkFilesReady() {
+                if (mainFileInput.files.length > 0 && invFileInput.files.length > 0) {
+                    loadDataBtn.disabled = false;
+                } else {
+                    loadDataBtn.disabled = true;
+                }
+            }
+        }
+        
+        // Configurar fechas iniciales
+        function setupDateInputs() {
+            const today = new Date();
+            const sixMonthsAgo = new Date();
+            sixMonthsAgo.setMonth(today.getMonth() - 6);
+            
+            document.getElementById('dateStart').valueAsDate = sixMonthsAgo;
+            document.getElementById('dateEnd').valueAsDate = today;
+        }
+        
+        // Configurar event listeners
+        function setupEventListeners() {
+            // Cargar datos
+            document.getElementById('loadDataBtn').addEventListener('click', loadData);
+            
+            // Ejecutar modelo
+            document.getElementById('runModelBtn').addEventListener('click', runModel);
+            
+            // Aplicar filtros
+            document.getElementById('applyFiltersBtn').addEventListener('click', applyHistoricFilters);
+        }
+        
+        // Cargar datos desde archivos CSV
+        function loadData() {
+            const mainFileInput = document.getElementById('mainFile');
+            const invFileInput = document.getElementById('invFile');
+            
+            if (mainFileInput.files.length === 0 || invFileInput.files.length === 0) {
+                alert('Por favor seleccione ambos archivos CSV');
+                return;
+            }
+            
+            // Mostrar estado de carga
+            document.getElementById('mainFileStatus').textContent = 'Procesando...';
+            document.getElementById('invFileStatus').textContent = 'Procesando...';
+            document.getElementById('loadDataBtn').disabled = true;
+            
+            // Parsear archivo principal
+            Papa.parse(mainFileInput.files[0], {
+                header: true,
+                dynamicTyping: true,
+                complete: function(results) {
+                    mainData = results.data;
+                    document.getElementById('mainFileStatus').textContent = 'Archivo cargado correctamente';
+                    document.getElementById('mainFileStatus').className = 'text-sm text-green-600';
+                    checkDataLoaded();
+                },
+                error: function(error) {
+                    console.error('Error al cargar el archivo principal:', error);
+                    document.getElementById('mainFileStatus').textContent = 'Error al cargar el archivo';
+                    document.getElementById('mainFileStatus').className = 'text-sm text-red-600';
+                    document.getElementById('loadDataBtn').disabled = false;
+                }
+            });
+            
+            // Parsear archivo inverso
+            Papa.parse(invFileInput.files[0], {
+                header: true,
+                dynamicTyping: true,
+                complete: function(results) {
+                    invData = results.data;
+                    document.getElementById('invFileStatus').textContent = 'Archivo cargado correctamente';
+                    document.getElementById('invFileStatus').className = 'text-sm text-green-600';
+                    checkDataLoaded();
+                },
+                error: function(error) {
+                    console.error('Error al cargar el archivo inverso:', error);
+                    document.getElementById('invFileStatus').textContent = 'Error al cargar el archivo';
+                    document.getElementById('invFileStatus').className = 'text-sm text-red-600';
+                    document.getElementById('loadDataBtn').disabled = false;
+                }
+            });
+            
+            function checkDataLoaded() {
+                if (mainData && invData) {
+                    document.getElementById('runModelBtn').disabled = false;
+                    document.getElementById('applyFiltersBtn').disabled = false;
+                    populateHistoricTable();
+                }
+            }
+        }
+        
+        // Ejecutar modelo XGBoost
+        function runModel() {
+            if (!mainData || !invData) {
+                alert('Por favor cargue los datos primero');
+                return;
+            }
+            
+            // Obtener parámetros
+            const iterations = parseInt(document.getElementById('iterations').value);
+            const indices = parseInt(document.getElementById('indices').value);
+            const nthread = parseInt(document.getElementById('nthread').value);
+            const maxDepth = parseInt(document.getElementById('maxDepth').value);
+            const trainPercentage = parseFloat(document.getElementById('trainPercentage').value);
+            
+            // Mostrar pantalla de carga
+            document.getElementById('loadingResults').classList.remove('hidden');
+            document.getElementById('noResultsMessage').classList.add('hidden');
+            document.getElementById('resultsContent').classList.add('hidden');
+            document.getElementById('runModelBtn').disabled = true;
+            
+            // Simular procesamiento del modelo (en una aplicación real, esto invocaría al modelo XGBoost)
+            setTimeout(() => {
+                // Generar resultados simulados
+                generateSimulatedResults();
+                
+                // Actualizar UI
+                document.getElementById('loadingResults').classList.add('hidden');
+                document.getElementById('resultsContent').classList.remove('hidden');
+                document.getElementById('runModelBtn').disabled = false;
+                
+                // Actualizar validación
+                document.getElementById('noValidationMessage').classList.add('hidden');
+                document.getElementById('validationContent').classList.remove('hidden');
+                
+                // Generar gráficas de validación
+                generateValidationCharts();
+                
+                // Mostrar métricas
+                displayMetrics();
+            }, 3000);
+        }
+        
+        // Generar resultados simulados para demostración
+        function generateSimulatedResults() {
+            const today = new Date();
+            const nextDates = [];
+            
+            // Generar fechas futuras
+            for (let i = 1; i <= 7; i++) {
+                const date = new Date(today);
+                date.setDate(today.getDate() + i * 3); // Cada 3 días
+                nextDates.push(date);
+            }
+            
+            // Generar predicciones
+            predictionResults = nextDates.map(date => {
+                return {
+                    fecha: formatDate(date),
+                    a: Math.floor(Math.random() * 43) + 1,
+                    b: Math.floor(Math.random() * 43) + 1,
+                    c: Math.floor(Math.random() * 43) + 1,
+                    d: Math.floor(Math.random() * 43) + 1,
+                    e: Math.floor(Math.random() * 43) + 1,
+                    f: Math.floor(Math.random() * 16) + 1
+                };
+            });
+            
+            // Generar datos de validación (predicciones pasadas vs valores reales)
+            validationData = {
+                dates: [],
+                predictions: {
+                    a: [], b: [], c: [], d: [], e: [], f: []
+                },
+                actual: {
+                    a: [], b: [], c: [], d: [], e: [], f: []
+                }
+            };
+            
+            // Usar datos reales del histórico para simulación de validación
+            for (let i = 0; i < 10; i++) {
+                if (i < mainData.length) {
+                    validationData.dates.push(mainData[i].FECHA || formatDate(new Date(today - (10-i) * 86400000)));
+                    
+                    // Valores reales (desde mainData)
+                    validationData.actual.a.push(mainData[i].Aa || Math.floor(Math.random() * 43) + 1);
+                    validationData.actual.b.push(mainData[i].Ba || Math.floor(Math.random() * 43) + 1);
+                    validationData.actual.c.push(mainData[i].Ca || Math.floor(Math.random() * 43) + 1);
+                    validationData.actual.d.push(mainData[i].Da || Math.floor(Math.random() * 43) + 1);
+                    validationData.actual.e.push(mainData[i].Ea || Math.floor(Math.random() * 43) + 1);
+                    validationData.actual.f.push(mainData[i].Fa || Math.floor(Math.random() * 16) + 1);
+                    
+                    // Predicciones simuladas (cerca de los valores reales)
+                    const offsetA = (Math.random() * 6) - 3;
+                    validationData.predictions.a.push(Math.max(1, Math.min(43, Math.round(validationData.actual.a[i] + offsetA))));
+                    
+                    const offsetB = (Math.random() * 6) - 3;
+                    validationData.predictions.b.push(Math.max(1, Math.min(43, Math.round(validationData.actual.b[i] + offsetB))));
+                    
+                    const offsetC = (Math.random() * 6) - 3;
+                    validationData.predictions.c.push(Math.max(1, Math.min(43, Math.round(validationData.actual.c[i] + offsetC))));
+                    
+                    const offsetD = (Math.random() * 6) - 3;
+                    validationData.predictions.d.push(Math.max(1, Math.min(43, Math.round(validationData.actual.d[i] + offsetD))));
+                    
+                    const offsetE = (Math.random() * 6) - 3;
+                    validationData.predictions.e.push(Math.max(1, Math.min(43, Math.round(validationData.actual.e[i] + offsetE))));
+                    
+                    const offsetF = (Math.random() * 3) - 1.5;
+                    validationData.predictions.f.push(Math.max(1, Math.min(16, Math.round(validationData.actual.f[i] + offsetF))));
+                }
+            }
+            
+            // Actualizar tabla de predicciones
+            const tableBody = document.getElementById('predictionTableBody');
+            tableBody.innerHTML = '';
+            
+            predictionResults.forEach(result => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td class="border py-2 px-3">${result.fecha}</td>
+                    <td class="border py-2 px-3 text-center bg-red-100">${result.a}</td>
+                    <td class="border py-2 px-3 text-center bg-green-100">${result.b}</td>
+                    <td class="border py-2 px-3 text-center bg-blue-100">${result.c}</td>
+                    <td class="border py-2 px-3 text-center bg-yellow-100">${result.d}</td>
+                    <td class="border py-2 px-3 text-center bg-purple-100">${result.e}</td>
+                    <td class="border py-2 px-3 text-center bg-orange-100">${result.f}</td>
+                `;
+                tableBody.appendChild(row);
+            });
+            
+            // Actualizar balotas de próxima predicción
+            document.getElementById('pred-a').textContent = predictionResults[0].a;
+            document.getElementById('pred-b').textContent = predictionResults[0].b;
+            document.getElementById('pred-c').textContent = predictionResults[0].c;
+            document.getElementById('pred-d').textContent = predictionResults[0].d;
+            document.getElementById('pred-e').textContent = predictionResults[0].e;
+            document.getElementById('pred-f').textContent = predictionResults[0].f;
+            document.getElementById('pred-date').textContent = `Fecha: ${predictionResults[0].fecha}`;
+        }
+        
+        // Generar gráficas de validación
+        function generateValidationCharts() {
+            const columns = ['A', 'B', 'C', 'D', 'E', 'F'];
+            const colors = {
+                prediction: ['rgba(255,82,82,0.7)', 'rgba(76,175,80,0.7)', 'rgba(33,150,243,0.7)', 
+                             'rgba(255,193,7,0.7)', 'rgba(156,39,176,0.7)', 'rgba(255,152,0,0.7)'],
+                actual: ['rgba(255,82,82,0.3)', 'rgba(76,175,80,0.3)', 'rgba(33,150,243,0.3)', 
+                         'rgba(255,193,7,0.3)', 'rgba(156,39,176,0.3)', 'rgba(255,152,0,0.3)']
+            };
+            
+            columns.forEach((column, index) => {
+                const ctx = document.getElementById(`chartColumn${column}`).getContext('2d');
+                
+                // Destruir gráfica anterior si existe
+                if (charts[`column${column}`]) {
+                    charts[`column${column}`].destroy();
+                }
+                
+                charts[`column${column}`] = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: validationData.dates,
+                        datasets: [
+                            {
+                                label: 'Predicción',
+                                data: validationData.predictions[column.toLowerCase()],
+                                borderColor: colors.prediction[index],
+                                backgroundColor: 'transparent',
+                                borderWidth: 3,
+                                pointRadius: 5,
+                                pointBackgroundColor: colors.prediction[index]
+                            },
+                            {
+                                label: 'Valor Real',
+                                data: validationData.actual[column.toLowerCase()],
+                                borderColor: colors.actual[index],
+                                backgroundColor: colors.actual[index],
+                                borderWidth: 2,
+                                pointRadius: 5,
+                                pointBackgroundColor: colors.actual[index],
+                                fill: true
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                max: column === 'F' ? 17 : 44,
+                                ticks: {
+                                    stepSize: column === 'F' ? 2 : 5
+                                }
+                            }
+                        },
+                        plugins: {
+                            tooltip: {
+                                mode: 'index',
+                                intersect: false
+                            },
+                            legend: {
+                                position: 'top',
+                            }
+                        }
+                    }
+                });
+            });
+        }
+        
+        // Mostrar métricas de rendimiento
+        function displayMetrics() {
+            const columns = ['a', 'b', 'c', 'd', 'e', 'f'];
+            
+            columns.forEach(column => {
+                // Calcular Error Medio Absoluto (MAE)
+                let sumAbsErrors = 0;
+                let sumSquaredErrors = 0;
+                let correctPredictions = 0;
+                
+                for (let i = 0; i < validationData.predictions[column].length; i++) {
+                    const error = Math.abs(validationData.predictions[column][i] - validationData.actual[column][i]);
+                    sumAbsErrors += error;
+                    sumSquaredErrors += error * error;
+                    
+                    // Contar predicciones correctas (error <= 1)
+                    if (error <= 1) {
+                        correctPredictions++;
+                    }
+                }
+                
+                const mae = sumAbsErrors / validationData.predictions[column].length;
+                const mse = sumSquaredErrors / validationData.predictions[column].length;
+                const accuracy = (correctPredictions / validationData.predictions[column].length) * 100;
+                
+                // Actualizar UI
+                document.getElementById(`mae-${column}`).textContent = mae.toFixed(2);
+                document.getElementById(`mse-${column}`).textContent = mse.toFixed(2);
+                document.getElementById(`acc-${column}`).textContent = accuracy.toFixed(1) + '%';
+            });
+        }
+        
+        // Poblar tabla histórica
+        function populateHistoricTable() {
+            if (!mainData || mainData.length === 0) {
+                return;
+            }
+            
+            const tableBody = document.getElementById('historicTableBody');
+            tableBody.innerHTML = '';
+            
+            // Mostrar últimos 20 registros
+            const displayData = mainData.slice(0, 20);
+            
+            displayData.forEach(row => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td class="border py-2 px-3">${row.FECHA || '-'}</td>
+                    <td class="border py-2 px-3 text-center bg-red-100">${row.Aa || '-'}</td>
+                    <td class="border py-2 px-3 text-center bg-green-100">${row.Ba || '-'}</td>
+                    <td class="border py-2 px-3 text-center bg-blue-100">${row.Ca || '-'}</td>
+                    <td class="border py-2 px-3 text-center bg-yellow-100">${row.Da || '-'}</td>
+                    <td class="border py-2 px-3 text-center bg-purple-100">${row.Ea || '-'}</td>
+                    <td class="border py-2 px-3 text-center bg-orange-100">${row.Fa || '-'}</td>
+                `;
+                tableBody.appendChild(tr);
+            });
+            
+            document.getElementById('noHistoricMessage').classList.add('hidden');
+            document.getElementById('historicContent').classList.remove('hidden');
+        }
+        
+        // Aplicar filtros a datos históricos
+        function applyHistoricFilters() {
+            if (!mainData || mainData.length === 0) {
+                return;
+            }
+            
+            const dateStart = document.getElementById('dateStart').value;
+            const dateEnd = document.getElementById('dateEnd').value;
+            const filterA = document.getElementById('filterA').value;
+            const filterB = document.getElementById('filterB').value;
+            const filterC = document.getElementById('filterC').value;
+            const filterD = document.getElementById('filterD').value;
+            const filterE = document.getElementById('filterE').value;
+            const filterF = document.getElementById('filterF').value;
+            
+            // Filtrar datos
+            let filteredData = [...mainData];
+            
+            // Filtrar por fecha
+            if (dateStart && dateEnd) {
+                filteredData = filteredData.filter(row => {
+                    if (!row.FECHA) return false;
+                    const rowDate = new Date(row.FECHA);
+                    return rowDate >= new Date(dateStart) && rowDate <= new Date(dateEnd);
+                });
+            }
+            
+            // Filtrar por números
+            if (filterA) filteredData = filteredData.filter(row => row.Aa == filterA);
+            if (filterB) filteredData = filteredData.filter(row => row.Ba == filterB);
+            if (filterC) filteredData = filteredData.filter(row => row.Ca == filterC);
+            if (filterD) filteredData = filteredData.filter(row => row.Da == filterD);
+            if (filterE) filteredData = filteredData.filter(row => row.Ea == filterE);
+            if (filterF) filteredData = filteredData.filter(row => row.Fa == filterF);
+            
+            // Actualizar tabla
+            const tableBody = document.getElementById('historicTableBody');
+            tableBody.innerHTML = '';
+            
+            if (filteredData.length === 0) {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td colspan="7" class="border py-4 text-center text-gray-500">No se encontraron resultados con los filtros aplicados</td>
+                `;
+                tableBody.appendChild(tr);
+            } else {
+                filteredData.forEach(row => {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td class="border py-2 px-3">${row.FECHA || '-'}</td>
+                        <td class="border py-2 px-3 text-center ${filterA && row.Aa == filterA ? 'bg-red-300' : 'bg-red-100'}">${row.Aa || '-'}</td>
+                        <td class="border py-2 px-3 text-center ${filterB && row.Ba == filterB ? 'bg-green-300' : 'bg-green-100'}">${row.Ba || '-'}</td>
+                        <td class="border py-2 px-3 text-center ${filterC && row.Ca == filterC ? 'bg-blue-300' : 'bg-blue-100'}">${row.Ca || '-'}</td>
+                        <td class="border py-2 px-3 text-center ${filterD && row.Da == filterD ? 'bg-yellow-300' : 'bg-yellow-100'}">${row.Da || '-'}</td>
+                        <td class="border py-2 px-3 text-center ${filterE && row.Ea == filterE ? 'bg-purple-300' : 'bg-purple-100'}">${row.Ea || '-'}</td>
+                        <td class="border py-2 px-3 text-center ${filterF && row.Fa == filterF ? 'bg-orange-300' : 'bg-orange-100'}">${row.Fa || '-'}</td>
+                    `;
+                    tableBody.appendChild(tr);
+                });
+            }
+        }
+        
+        // Utilidades
+        function formatDate(date) {
+            const day = String(date.getDate()).padStart(2, '0');
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const year = date.getFullYear();
+            return `${day}/${month}/${year}`;
+        }
+        
+        // Modo de demostración
+        function setupDemoMode() {
+            // Datos de demostración
+            const demoMainData = [];
+            const demoInvData = [];
+            
+            // Generar datos de demostración
+            const today = new Date();
+            for (let i = 0; i < 50; i++) {
+                const date = new Date(today);
+                date.setDate(today.getDate() - i * 7);
+                
+                demoMainData.push({
+                    FECHA: formatDate(date),
+                    Aa: Math.floor(Math.random() * 43) + 1,
+                    Ba: Math.floor(Math.random() * 43) + 1,
+                    Ca: Math.floor(Math.random() * 43) + 1,
+                    Da: Math.floor(Math.random() * 43) + 1,
+                    Ea: Math.floor(Math.random() * 43) + 1,
+                    Fa: Math.floor(Math.random() * 16) + 1
+                });
+                
+                demoInvData.push({
+                    FECHA: formatDate(date),
+                    // Otros campos invertidos para el archivo inverso
+                });
+            }
+            
+            // Botón de demostración
+            const demoButton = document.createElement('button');
+            demoButton.textContent = 'Cargar Datos de Demostración';
+            demoButton.className = 'mt-4 w-full bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 px-4 rounded';
+            demoButton.addEventListener('click', function() {
+                // Cargar datos de demostración
+                mainData = demoMainData;
+                invData = demoInvData;
+                
+                // Actualizar UI
+                document.getElementById('mainFileStatus').textContent = 'Datos de demostración cargados';
+                document.getElementById('mainFileStatus').className = 'text-sm text-green-600';
+                
+                document.getElementById('invFileStatus').textContent = 'Datos de demostración cargados';
+                document.getElementById('invFileStatus').className = 'text-sm text-green-600';
+                
+                document.getElementById('runModelBtn').disabled = false;
+                document.getElementById('applyFiltersBtn').disabled = false;
+                
+                populateHistoricTable();
+            });
+            
+            // Añadir botón a la sección de carga de datos
+            const loadDataSection = document.querySelector('.bg-white.rounded-lg.shadow-md.p-6.mb-8');
+            loadDataSection.appendChild(demoButton);
+        }
+    </script>
+</body>
+</html>
